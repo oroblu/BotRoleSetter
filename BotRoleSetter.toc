@@ -1,0 +1,9 @@
+## Interface: 11400
+## Title: BotRoleSetter
+## Author: Cortex
+## Notes: CMaNGOS Playerbots quick role setup. GossipFrame-style UI. /brs to toggle.
+## Version: 5.0
+## DefaultState: Enabled
+## SavedVariablesPerCharacter: BRS_Options
+
+BotRoleSetter.lua
