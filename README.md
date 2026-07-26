@@ -12,7 +12,7 @@ Manually whispering `talents pve prot`, `.bot init`, `co +tank`, etc. to every b
 
 1. **Target a bot** (or open `/brs` while in a party — auto-selects the first member)
 2. **Pick a role** — Tank, Healer, or Dps (unavailable roles are greyed out)
-3. **Choose a talent spec** from the dropdown (93+ specs from `aiplayerbot.conf.dist.in`)
+3. **Choose a talent spec** from the dropdown (76 specs from `aiplayerbot.conf`)
 4. **Click Apply** — queues 7 commands via whisper at 1-second intervals
 
 ## Quick Start
@@ -108,7 +108,7 @@ AiPlayerbot.AutoPickTalents = full
 ## Troubleshooting
 
 **"Apply talents [spec] talent link is invalid":**
-The spec names in this addon come from `cmangos/playerbots` default config. Your server may use different spec names. Run `/w <botname> talents list` on a bot to see the actual spec names available, then update the `TALENTS` table in `BotRoleSetter.lua` accordingly.
+The spec names in this addon come from `spp-classics-cmangos` default config (`Settings/vanilla/aiplayerbot.conf`). Your server may use different spec names. Run `/w <botname> talents list` on a bot to see the actual spec names available, then update the `TALENTS` table in `BotRoleSetter.lua` accordingly.
 
 **"You are not in party, invite your bots":**
 You're not in a party and have no player target. Join a party or manually target a bot, then open `/brs`.
@@ -125,4 +125,4 @@ MIT — do whatever you want with it.
 
 ## Credits
 
-Built on the [CMaNGOS playerbots](https://github.com/cmangos/playerbots) ecosystem. UI patterns from the GossipFrame (`UI-QuestGreeting-*` textures, `UIPanelScrollFrameTemplate`, portrait mask). Spec data from `aiplayerbot.conf.dist.in`.
+Built on the [SPP Classics CMaNGOS](https://github.com/celguar/spp-classics-cmangos) ecosystem. UI patterns from the GossipFrame (`UI-QuestGreeting-*` textures, `UIPanelScrollFrameTemplate`, portrait mask). Spec data from `Settings/vanilla/aiplayerbot.conf`.

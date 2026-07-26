@@ -18,7 +18,7 @@ SlashCmdList["BRS"] = function()
             if IsInRaid() then
                 for i = 1, 40 do
                     local u = "raid" .. i
-                    if UnitExists(u) and not UnitIsUnit(u, "player") then
+                    if UnitExists(u) and UnitIsPlayer(u) and not UnitIsUnit(u, "player") then
                         BotRoleSetterFrame._autoUnit = u
                         break
                     end
@@ -68,8 +68,8 @@ local CLASS_ICONS = {
     DRUID       = { name = "Druid",       icon = "Ability_Druid_Maul" },
 }
 
------------------------------ Talent specs from cmangos/playerbots aiplayerbot.conf.dist.in
--- Source: https://github.com/cmangos/playerbots
+----------------------------- Talent specs from spp-classics-cmangos aiplayerbot.conf
+-- Source: https://github.com/celguar/spp-classics-cmangos (Settings/vanilla/aiplayerbot.conf)
 -- Every spec is a valid argument to the `talents` bot command.
 local TALENTS = {
     ----------------------------- Warrior
@@ -77,32 +77,23 @@ local TALENTS = {
         tank = {
             "pve prot",
             "pvp prot",
-            "furyprot",
-            "furyprot (slam)",
-            "furyprot (demo shout)",
         },
         dps = {
             "pve arms",
             "pve fury",
             "pvp arms",
             "pvp fury",
-            "fury slam",
-            "arms axes",
-            "arms maces",
-            "arms swords",
-            "arms polearms",
-            "2h fury",
-            "fury no deep wounds",
         },
     },
     ----------------------------- Paladin
     PALADIN = {
         tank = {
             "pvp tank prot",
+            "pve tank prot (stun reckoning)",
         },
         healer = {
             "pve heal holy (sanctuary)",
-            "pve heal holy (prot! holy shock taunt)",
+            "pve heal holy (holy shock)",
             "pvp heal holy",
             "pvp heal Holy",
         },
@@ -118,25 +109,21 @@ local TALENTS = {
         dps = {
             "pve dps mm (mm/sv)",
             "pve dps mm (mm/bm)",
-            "pve dps mm (standalone)",
             "pve dps bm (farmer)",
+            "pve dps mm",
             "pvp dps surv",
             "pvp dps mm",
             "pvp dps bm",
         },
     },
-    ----------------------------- Rogue
+    ----------------------------- Rogue (duplicate indices in config — only last value per index)
     ROGUE = {
         dps = {
-            "pve dps assasination",
-            "pve dps combat",
             "pve dps combat (swords)",
             "pve dps combat (daggers)",
-            "pve dps combat (daggers2)",
+            "pve dps assassination",
             "pvp dps combat (swords)",
-            "pvp dps combat (daggers)",
-            "pvp dps combat (daggers2)",
-            "pvp dps combat",
+            "pvp dps subtlety",
         },
     },
     ----------------------------- Priest
@@ -179,7 +166,7 @@ local TALENTS = {
             "pve dps frost (fun)",
             "pve dps frost (aoe farm)",
             "pve dps arcane (glass cannon)",
-            "pve dps frost (standalone)",
+            "pve dps frost",
             "pvp dps frost",
             "pvp dps frost (frosted fun)",
             "pvp dps arcane (venruki)",
@@ -222,15 +209,6 @@ local TALENTS = {
     },
 }
 
--- Count total specs for reference
-local totalSpecs = 0
-for _, classTable in pairs(TALENTS) do
-    for _, specs in pairs(classTable) do
-        totalSpecs = totalSpecs + #specs
-    end
-end
--- totalSpecs = 93 unique specs across all classes
-
 -- Role strategy names for co command (checked by IsTank/IsHeal in PlayerbotAI.cpp)
 local ROLE_STRATEGIES = { tank = "tank", healer = "heal", dps = "dps" }
 local ALL_ROLE_STRS = { "tank", "heal", "dps" }
@@ -255,10 +233,10 @@ local function GetDefaultSpec(cf, role)
     return specs and specs[1] or nil
 end
 
--- Returns the currently selected spec (from dropdown), or the default
+-- Returns the currently selected spec (from dropdown), or the default.
+-- Warns in chat if the saved spec is no longer valid and falls back to default.
 local function GetSpec(cf, role)
     if BRS_Options.spec then
-        -- Validate: only return the stored spec if it exists in the current class+role list
         local specs = GetSpecList(cf, role)
         if specs then
             for _, s in ipairs(specs) do
@@ -266,6 +244,14 @@ local function GetSpec(cf, role)
                     return BRS_Options.spec
                 end
             end
+        end
+        -- Saved spec no longer valid (removed/renamed in TALENTS table)
+        local old = BRS_Options.spec
+        BRS_Options.spec = nil
+        local fallback = GetDefaultSpec(cf, role)
+        if fallback then
+            DEFAULT_CHAT_FRAME:AddMessage(string.format(
+                "|cffffaa44[BRS] Spec '%s' no longer available, using '%s'|r", old, fallback))
         end
     end
     return GetDefaultSpec(cf, role)
@@ -278,8 +264,8 @@ end
 -- 2. .bot init → gear + default strats (isRandomBot=false so talents survive).
 -- 3. reset strats → recalc defaults on the new spec.
 -- 4. co/nc → custom layer on top (must be AFTER .bot init, which wipes them).
-local function BuildCommands(cf, role, name)
-    local spec = GetSpec(cf, role)
+local function BuildCommands(cf, role, name, spec)
+    if not spec then spec = GetSpec(cf, role) end
     local c = {}
 
     if spec then
@@ -305,7 +291,8 @@ local function SendToBot(cf, role)
         DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] No target!|r")
         return
     end
-    local cmds = BuildCommands(cf, role, name)
+    local spec = GetSpec(cf, role)  -- Called once, used by BuildCommands and display
+    local cmds = BuildCommands(cf, role, name, spec)
     DEFAULT_CHAT_FRAME:AddMessage("|cff88ddff[BRS] Queueing " .. #cmds .. " commands to " .. name .. ":|r")
     for i, cmd in ipairs(cmds) do
         DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff888888  [%d/%d] t=%ds  %s|r", i, #cmds, i - 1, cmd))
@@ -316,7 +303,6 @@ local function SendToBot(cf, role)
 
     local ci = CLASS_ICONS[cf]
     local cn = ci and ci.name or cf
-    local spec = GetSpec(cf, role)
     DEFAULT_CHAT_FRAME:AddMessage(string.format(
         "|cff00ff00[BRS]|r %s -> |cffffcc00%s|r (%s)", name, cn, role:upper()))
     if spec then
@@ -324,7 +310,7 @@ local function SendToBot(cf, role)
             "|cff88ddff  talents: %s|r", spec))
     end
     DEFAULT_CHAT_FRAME:AddMessage(string.format(
-        "|cff88ddff  %d commands queued (3s intervals)|r", #cmds))
+        "|cff88ddff  %d commands queued (1s intervals)|r", #cmds))
 end
 
 ----------------------------- GossipFrame-style UI
@@ -510,6 +496,7 @@ local function UpdateClassDisplay()
         titleText:SetTextColor(1, 1, 1)                     -- White
     else
         classIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
+        classIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)       -- Crop fallback icon too
         titleText:SetText("Select your bot!")
         titleText:SetTextColor(1, 1, 1)                     -- White
     end
@@ -524,14 +511,14 @@ function OnTargetChanged()
         local cls, cf = UnitClass(unit)
         if cf and CLASS_ICONS[cf] then
             frame._currentClassFile = cf
-            UpdateClassDisplay()
-            RefreshHLRoles()
+        else
+            frame._currentClassFile = nil
         end
     else
         frame._currentClassFile = nil
-        UpdateClassDisplay()
-        RefreshHLRoles()
     end
+    UpdateClassDisplay()
+    RefreshHLRoles()
 end
 
 ----------------------------- Build UI
@@ -564,11 +551,15 @@ local function CreateUI()
     classIcon:SetPoint("TOPLEFT", 9, -8)
     classIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)  -- Crop the built-in icon border
 
-    -- Circular mask anchored to the icon itself (same size)
-    local iconMask = frame:CreateMaskTexture(nil, "ARTWORK")
-    iconMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
-    iconMask:SetAllPoints(classIcon)
-    classIcon:AddMaskTexture(iconMask)
+    -- Circular mask (pcall guard — CreateMaskTexture may not exist on all Classic builds)
+    if frame.CreateMaskTexture then
+        local ok, iconMask = pcall(frame.CreateMaskTexture, frame, nil, "ARTWORK")
+        if ok and iconMask then
+            pcall(iconMask.SetTexture, iconMask, "Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+            iconMask:SetAllPoints(classIcon)
+            pcall(classIcon.AddMaskTexture, classIcon, iconMask)
+        end
+    end
 
     -- Title: bot name + class on one line (QuestFont, white, same style as greeting)
     titleText = frame:CreateFontString(nil, "OVERLAY", "QuestFont")
@@ -678,10 +669,9 @@ local function CreateUI()
         ddButton:Hide()
     end
 
-    -- Transparent overlay button: full dropdown area + 10px wider
+    -- Transparent overlay button: matches dropdown area exactly
     local overlay = CreateFrame("Button", nil, specDropdown)
-    overlay:SetPoint("TOPLEFT", specDropdown, "TOPLEFT", 0, 0)
-    overlay:SetPoint("BOTTOMRIGHT", specDropdown, "BOTTOMRIGHT", 30, 0)
+    overlay:SetAllPoints(specDropdown)
     overlay:SetScript("OnClick", function()
         ToggleDropDownMenu(1, nil, specDropdown)
     end)
