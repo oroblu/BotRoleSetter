@@ -1,19 +1,59 @@
 --[[
-BotRoleSetter v5 — CMaNGOS Playerbots (Classic Era 1.14.x)
+BotRoleSetter v6 — CMaNGOS Playerbots (Classic Era 1.14.x)
 Auto-detects bot class from target. Picks the right talent spec for each role.
 Uses `talents <specname>` from aiplayerbot.conf.dist.in spec names.
-GossipFrame-style UI with Greeting texture corners.
+GossipFrame-style UI with Greeting texture corners + spec dropdown.
 --]]
+
+-- Forward declarations (Lua 5.1: local functions must be declared before first use)
+local OnTargetChanged
 
 SLASH_BRS1 = "/brs"
 SlashCmdList["BRS"] = function()
     if BotRoleSetterFrame then
+        local opening = not BotRoleSetterFrame:IsShown()
+        if opening then
+            -- Auto-select first group member on open
+            BotRoleSetterFrame._autoUnit = nil
+            if IsInRaid() then
+                for i = 1, 40 do
+                    local u = "raid" .. i
+                    if UnitExists(u) and not UnitIsUnit(u, "player") then
+                        BotRoleSetterFrame._autoUnit = u
+                        break
+                    end
+                end
+            elseif IsInGroup() then
+                if UnitExists("party1") then
+                    BotRoleSetterFrame._autoUnit = "party1"
+                end
+            end
+            if not BotRoleSetterFrame._autoUnit then
+                DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] You are not in party, invite your bots|r")
+            end
+            OnTargetChanged()
+        end
         BotRoleSetterFrame:SetShown(not BotRoleSetterFrame:IsShown())
     end
 end
 
 if not BRS_Options then BRS_Options = {} end
 if not BRS_Options.role then BRS_Options.role = "tank" end
+if not BRS_Options.spec then BRS_Options.spec = nil end
+
+-- Returns the best available bot unit:
+-- 1. Manual target (always takes priority — even NPC, UI handles the "?" state)
+-- 2. Auto-selected unit from /brs open (only if no target)
+-- 3. Falls back to "target"
+local function GetBotUnit()
+    if UnitExists("target") then
+        return "target"
+    end
+    if BotRoleSetterFrame and BotRoleSetterFrame._autoUnit and UnitExists(BotRoleSetterFrame._autoUnit) then
+        return BotRoleSetterFrame._autoUnit
+    end
+    return "target"
+end
 
 ----------------------------- Class icons
 local CLASS_ICONS = {
@@ -28,66 +68,251 @@ local CLASS_ICONS = {
     DRUID       = { name = "Druid",       icon = "Ability_Druid_Maul" },
 }
 
------------------------------ Talent specs from aiplayerbot.conf.dist.in
+----------------------------- Talent specs from cmangos/playerbots aiplayerbot.conf.dist.in
+-- Source: https://github.com/cmangos/playerbots
+-- Every spec is a valid argument to the `talents` bot command.
 local TALENTS = {
-    WARRIOR     = { tank = "pve prot",                             dps = "pve fury" },
-    PALADIN     = { tank = "pvp tank prot",     healer = "pve heal holy (sanctuary)", dps = "pve dps ret (basic ret)" },
-    HUNTER      = {                                                                    dps = "pve dps mm (mm/sv)" },
-    ROGUE       = {                                                                    dps = "pve dps combat" },
-    PRIEST      = {                          healer = "pve heal holy",                dps = "pve dps shadow" },
-    SHAMAN      = {                          healer = "pve heal resto (pure)",        dps = "pve dps elem (elemental mastery)" },
-    MAGE        = {                                                                    dps = "pve dps fire" },
-    WARLOCK     = {                                                                    dps = "pve dps demo (ds/ruin)" },
-    DRUID       = { tank = "pve dps feral (dps/tank hybrid)", healer = "pve dps resto (swiftmend spec)", dps = "pve dps feral" },
+    ----------------------------- Warrior
+    WARRIOR = {
+        tank = {
+            "pve prot",
+            "pvp prot",
+            "furyprot",
+            "furyprot (slam)",
+            "furyprot (demo shout)",
+        },
+        dps = {
+            "pve arms",
+            "pve fury",
+            "pvp arms",
+            "pvp fury",
+            "fury slam",
+            "arms axes",
+            "arms maces",
+            "arms swords",
+            "arms polearms",
+            "2h fury",
+            "fury no deep wounds",
+        },
+    },
+    ----------------------------- Paladin
+    PALADIN = {
+        tank = {
+            "pvp tank prot",
+        },
+        healer = {
+            "pve heal holy (sanctuary)",
+            "pve heal holy (prot! holy shock taunt)",
+            "pvp heal holy",
+            "pvp heal Holy",
+        },
+        dps = {
+            "pve dps ret (basic ret)",
+            "pve dps ret (geared ret)",
+            "pvp dps ret",
+            "pvp dps ret (Loaded Reck Bomb)",
+        },
+    },
+    ----------------------------- Hunter
+    HUNTER = {
+        dps = {
+            "pve dps mm (mm/sv)",
+            "pve dps mm (mm/bm)",
+            "pve dps mm (standalone)",
+            "pve dps bm (farmer)",
+            "pvp dps surv",
+            "pvp dps mm",
+            "pvp dps bm",
+        },
+    },
+    ----------------------------- Rogue
+    ROGUE = {
+        dps = {
+            "pve dps assasination",
+            "pve dps combat",
+            "pve dps combat (swords)",
+            "pve dps combat (daggers)",
+            "pve dps combat (daggers2)",
+            "pvp dps combat (swords)",
+            "pvp dps combat (daggers)",
+            "pvp dps combat (daggers2)",
+            "pvp dps combat",
+        },
+    },
+    ----------------------------- Priest
+    PRIEST = {
+        healer = {
+            "pve heal disc",
+            "pve heal holy",
+            "pvp heal holy",
+        },
+        dps = {
+            "pve dps shadow",
+            "pvp dps disc",
+            "pvp dps shadow",
+        },
+    },
+    ----------------------------- Shaman
+    SHAMAN = {
+        healer = {
+            "pve heal resto (pure)",
+            "pve heal resto (melee support resto)",
+            "pvp heal resto",
+        },
+        dps = {
+            "pve dps elem (elemental mastery)",
+            "pve dps elem (nature's swiftness)",
+            "pve dps elem (force of nature + hand of edward the odd)",
+            "pvp dps elem (nature's swiftness)",
+            "pvp dps elem (elemental mastery)",
+            "pvp dps enhan (2hand)",
+        },
+    },
+    ----------------------------- Mage
+    MAGE = {
+        dps = {
+            "pve dps arcane",
+            "pve dps fire",
+            "pve dps frost (winter's chill spec)",
+            "pve dps frost (frost build for farming)",
+            "pve dps frost (frost-arcane)",
+            "pve dps frost (fun)",
+            "pve dps frost (aoe farm)",
+            "pve dps arcane (glass cannon)",
+            "pve dps frost (standalone)",
+            "pvp dps frost",
+            "pvp dps frost (frosted fun)",
+            "pvp dps arcane (venruki)",
+        },
+    },
+    ----------------------------- Warlock
+    WARLOCK = {
+        dps = {
+            "pve dps demo (ds/ruin)",
+            "pve dps demo (succubus sacrifice)",
+            "pve dps dest (imp lord)",
+            "pve dps demo (sm/ruin)",
+            "pve dps affli",
+            "pvp dps demo (sl)",
+            "pvp dps demo (soul link/ shadowburn)",
+            "pvp dps demo (soul link/ nightfall)",
+            "pvp dps affli (sm/ruin)",
+            "pvp dps affli (drakedog)",
+            "pvp dps destro (conflagrate)",
+        },
+    },
+    ----------------------------- Druid
+    DRUID = {
+        tank = {
+            "pve dps feral (dps/tank hybrid)",
+        },
+        healer = {
+            "pve dps resto (swiftmend spec)",
+            "pve dps resto (regrowth spec bear aoe farm)",
+            "pve dps resto (resto-balance)",
+            "pvp dps resto (swiftmend / feral charge)",
+            "pvp dps resto",
+        },
+        dps = {
+            "pve dps feral",
+            "pvp dps feral (heart of the wild / ns)",
+            "pvp dps balance (moonfury)",
+            "pvp dps balance (boomkin)",
+        },
+    },
 }
+
+-- Count total specs for reference
+local totalSpecs = 0
+for _, classTable in pairs(TALENTS) do
+    for _, specs in pairs(classTable) do
+        totalSpecs = totalSpecs + #specs
+    end
+end
+-- totalSpecs = 93 unique specs across all classes
 
 -- Role strategy names for co command (checked by IsTank/IsHeal in PlayerbotAI.cpp)
 local ROLE_STRATEGIES = { tank = "tank", healer = "heal", dps = "dps" }
 local ALL_ROLE_STRS = { "tank", "heal", "dps" }
 
+----------------------------- Helpers
+
 local function CanRole(cf, role)
     return TALENTS[cf] and TALENTS[cf][role] ~= nil
 end
 
-local function GetSpec(cf, role)
+-- Returns the list of spec strings for a class+role, or nil
+local function GetSpecList(cf, role)
     if TALENTS[cf] and TALENTS[cf][role] then
         return TALENTS[cf][role]
     end
     return nil
 end
 
+-- Returns the default (first) spec for a class+role, or nil
+local function GetDefaultSpec(cf, role)
+    local specs = GetSpecList(cf, role)
+    return specs and specs[1] or nil
+end
+
+-- Returns the currently selected spec (from dropdown), or the default
+local function GetSpec(cf, role)
+    if BRS_Options.spec then
+        -- Validate: only return the stored spec if it exists in the current class+role list
+        local specs = GetSpecList(cf, role)
+        if specs then
+            for _, s in ipairs(specs) do
+                if s == BRS_Options.spec then
+                    return BRS_Options.spec
+                end
+            end
+        end
+    end
+    return GetDefaultSpec(cf, role)
+end
+
 ----------------------------- Build command sequence
+-- Order matters for party bots:
+-- 1. talents first → auto talents inside .bot init sees the spec and continues it,
+--    so InitEquipment picks gear for the right role (tank/dps/healer).
+-- 2. .bot init → gear + default strats (isRandomBot=false so talents survive).
+-- 3. reset strats → recalc defaults on the new spec.
+-- 4. co/nc → custom layer on top (must be AFTER .bot init, which wipes them).
 local function BuildCommands(cf, role, name)
     local spec = GetSpec(cf, role)
-    local c = { "reset strats" }
+    local c = {}
 
-    -- Set combat role strategy (reset strats clears all, then add the selected role)
-    tinsert(c, "co +" .. ROLE_STRATEGIES[role] .. ",-cc,-behind")
-
-    tinsert(c, "nc -quest,-loot,+ai chat,-grind")
-    tinsert(c, ".bot init " .. name)
     if spec then
         tinsert(c, "talents " .. spec)
     end
-    tinsert(c, ".bot gear " .. name)
+    tinsert(c, ".bot init " .. name .. " rare")
+    tinsert(c, "reset strats")
+    tinsert(c, "nc -quest,-loot,+ai chat,-grind")
+    tinsert(c, "follow")
+    local coCmd = "co +" .. ROLE_STRATEGIES[role] .. ",-cc,-behind"
+    if role ~= "dps" then
+        coCmd = coCmd .. ",-dps"
+    end
+    tinsert(c, "summon")
+    tinsert(c, coCmd)
     return c
 end
 
 local function SendToBot(cf, role)
-    local name = GetUnitName("target", true)
+    local unit = GetBotUnit()
+    local name = GetUnitName(unit, true)
     if not name then
         DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] No target!|r")
         return
     end
     local cmds = BuildCommands(cf, role, name)
+    DEFAULT_CHAT_FRAME:AddMessage("|cff88ddff[BRS] Queueing " .. #cmds .. " commands to " .. name .. ":|r")
     for i, cmd in ipairs(cmds) do
+        DEFAULT_CHAT_FRAME:AddMessage(string.format("|cff888888  [%d/%d] t=%ds  %s|r", i, #cmds, i - 1, cmd))
         C_Timer.After(i - 1, function()
             SendChatMessage(cmd, "WHISPER", nil, name)
         end)
     end
-    C_Timer.After(#cmds, function()
-        SendChatMessage(".bot gear " .. name, "WHISPER", nil, name)
-    end)
 
     local ci = CLASS_ICONS[cf]
     local cn = ci and ci.name or cf
@@ -99,7 +324,7 @@ local function SendToBot(cf, role)
             "|cff88ddff  talents: %s|r", spec))
     end
     DEFAULT_CHAT_FRAME:AddMessage(string.format(
-        "|cff88ddff  %d commands queued (3s intervals)|r", #cmds + 1))
+        "|cff88ddff  %d commands queued (3s intervals)|r", #cmds))
 end
 
 ----------------------------- GossipFrame-style UI
@@ -123,29 +348,15 @@ local function TryLoadTexture(parent, path, layer, sizeW, sizeH, anchor, offX, o
 end
 
 -- UI state variables
-local frame, greetingText, roleStatusText, classIcon, classNameText
+local frame, greetingText, titleText, classIcon
 local roleBtns = {}
 local scrollFrame, scrollChild
+local specDropdown
 
------------------------------ Refresh greeting text + role status
+----------------------------- Refresh greeting text
 local function RefreshGreeting()
     if not greetingText then return end
-    local role = BRS_Options.role
-    local cf = frame._currentClassFile
-    local spec = cf and GetSpec(cf, role)
-    local roleName = role and role:upper() or "?"
-
-    -- Scroll text: only the instructional part (fixed)
-    greetingText:SetText("Target a player bot, pick a role, click APPLY.")
-
-    -- Role status: centered two-liner between buttons and APPLY
-    if roleStatusText then
-        if spec then
-            roleStatusText:SetText("Role:\n" .. roleName .. " (" .. spec .. ")")
-        else
-            roleStatusText:SetText("Role:\n" .. roleName)
-        end
-    end
+    greetingText:SetText("Target a player bot, pick a role, choose a spec, click APPLY.")
 
     -- Resize scroll child to fit content
     if scrollChild and scrollFrame then
@@ -156,7 +367,80 @@ local function RefreshGreeting()
     end
 end
 
------------------------------ Refresh role button highlights
+----------------------------- Spec dropdown init (called every time dropdown opens)
+-- Classic 1.14 pattern: reuse a plain {} table — UIDropDownMenu_AddButton copies fields at call time.
+-- UIDropDownMenu_CreateInfo() is NOT used because it may not exist or behave differently in Classic.
+local function SpecDropdown_Initialize()
+    local cf = frame._currentClassFile
+    local role = BRS_Options.role
+    local specs = GetSpecList(cf, role)
+
+    if not specs or #specs == 0 then
+        local info = {}
+        if cf then
+            info.text = "Role not available"
+        else
+            info.text = "Select one of your bots before click!"
+        end
+        info.disabled = true
+        info.notCheckable = true
+        UIDropDownMenu_AddButton(info)
+        return
+    end
+
+    for _, spec in ipairs(specs) do
+        local info = {}
+        info.text = spec
+        info.func = function()
+            BRS_Options.spec = spec
+            UIDropDownMenu_SetText(specDropdown, spec)
+        end
+        info.checked = (spec == BRS_Options.spec)
+        info.notCheckable = false
+        info.disabled = false
+        UIDropDownMenu_AddButton(info)
+    end
+end
+
+----------------------------- Refresh spec dropdown state
+-- Validates the currently selected spec and updates the dropdown button text.
+-- Called whenever class, role, or target changes.
+local function RefreshSpecDropdown()
+    if not specDropdown then return end
+
+    local cf = frame._currentClassFile
+    local role = BRS_Options.role
+    local specs = GetSpecList(cf, role)
+
+    if not specs or #specs == 0 then
+        if cf then
+            UIDropDownMenu_SetText(specDropdown, "Role not available")
+        else
+            UIDropDownMenu_SetText(specDropdown, "Select one of your bots before click!")
+        end
+        return
+    end
+
+    -- Keep current spec if it still exists in the list, otherwise default to first
+    local current = BRS_Options.spec
+    local found = false
+    if current then
+        for _, s in ipairs(specs) do
+            if s == current then
+                found = true
+                break
+            end
+        end
+    end
+
+    if not found then
+        BRS_Options.spec = specs[1]
+    end
+
+    UIDropDownMenu_SetText(specDropdown, BRS_Options.spec)
+end
+
+----------------------------- Refresh role button highlights + dropdown
 local function RefreshHLRoles()
     local cf = frame._currentClassFile
     for k, b in pairs(roleBtns) do
@@ -171,6 +455,7 @@ local function RefreshHLRoles()
             b:Enable()
         end
     end
+    RefreshSpecDropdown()
     RefreshGreeting()
 end
 
@@ -205,38 +490,38 @@ local function MakeRoleBtn(parent, text, key)
 
     b:SetScript("OnClick", function(self)
         BRS_Options.role = self._key
+        CloseDropDownMenus()
         RefreshHLRoles()
     end)
     return b
 end
 
------------------------------ Refresh class display (icon + name)
+----------------------------- Refresh class display (icon + title)
 local function UpdateClassDisplay()
-    local name = GetUnitName("target", true)
-    local cf = name and UnitExists("target") and UnitIsPlayer("target") and select(2, UnitClass("target"))
+    local unit = GetBotUnit()
+    local name = GetUnitName(unit, true)
+    local cf = name and UnitExists(unit) and UnitIsPlayer(unit) and select(2, UnitClass(unit))
 
     if cf and CLASS_ICONS[cf] then
         local ci = CLASS_ICONS[cf]
         classIcon:SetTexture("Interface\\Icons\\" .. ci.icon)
-        classNameText:SetText(ci.name)
-        classNameText:SetTextColor(1, 1, 1)
+        classIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)  -- Re-apply crop after SetTexture
+        titleText:SetText(name .. " (" .. ci.name .. ")")   -- "Botname (Class)"
+        titleText:SetTextColor(1, 1, 1)                     -- White
     else
         classIcon:SetTexture("Interface\\Icons\\INV_Misc_QuestionMark")
-        if name and UnitExists("target") then
-            classNameText:SetText("Not a player")
-            classNameText:SetTextColor(0.8, 0.4, 0.4)
-        else
-            classNameText:SetText("<no target>")
-            classNameText:SetTextColor(0.6, 0.6, 0.6)
-        end
+        titleText:SetText("Select your bot!")
+        titleText:SetTextColor(1, 1, 1)                     -- White
     end
 end
 
 ----------------------------- On target changed
-local function OnTargetChanged()
-    local n = GetUnitName("target", true)
-    if n and UnitExists("target") and UnitIsPlayer("target") then
-        local cls, cf = UnitClass("target")
+function OnTargetChanged()
+    CloseDropDownMenus()
+    local unit = GetBotUnit()
+    local n = GetUnitName(unit, true)
+    if n and UnitExists(unit) and UnitIsPlayer(unit) then
+        local cls, cf = UnitClass(unit)
         if cf and CLASS_ICONS[cf] then
             frame._currentClassFile = cf
             UpdateClassDisplay()
@@ -273,18 +558,23 @@ local function CreateUI()
     -- Patch texture
     TryLoadTexture(frame, "Interface\\QuestFrame\\UI-Quest-BotLeftPatch", "ARTWORK", 128, 64, "BOTTOMLEFT", 22, 68)
 
-    -- Class icon (60x60, TOPLEFT 7,-6 — same position as GossipFrame portrait)
-    classIcon = frame:CreateTexture(nil, "ARTWORK")
-    classIcon:SetSize(60, 60)
-    classIcon:SetPoint("TOPLEFT", 7, -6)
+    -- Class icon with circular mask (like GossipFrame portrait)
+    classIcon = frame:CreateTexture(nil, "BACKGROUND")
+    classIcon:SetSize(56, 56)
+    classIcon:SetPoint("TOPLEFT", 9, -8)
+    classIcon:SetTexCoord(0.08, 0.92, 0.08, 0.92)  -- Crop the built-in icon border
 
-    -- Class name (GameFontHighlight, TOP 0,-23 — same as GossipFrame NPC name)
-    local nameFrame = CreateFrame("Frame", nil, frame)
-    nameFrame:SetSize(1, 14)
-    nameFrame:SetPoint("TOP", frame, "TOP", 0, -23)
-    classNameText = nameFrame:CreateFontString(nil, "BACKGROUND", "GameFontHighlight")
-    classNameText:SetPoint("LEFT")
-    classNameText:SetPoint("RIGHT")
+    -- Circular mask anchored to the icon itself (same size)
+    local iconMask = frame:CreateMaskTexture(nil, "ARTWORK")
+    iconMask:SetTexture("Interface\\CHARACTERFRAME\\TempPortraitAlphaMask", "CLAMPTOBLACKADDITIVE", "CLAMPTOBLACKADDITIVE")
+    iconMask:SetAllPoints(classIcon)
+    classIcon:AddMaskTexture(iconMask)
+
+    -- Title: bot name + class on one line (QuestFont, white, same style as greeting)
+    titleText = frame:CreateFontString(nil, "OVERLAY", "QuestFont")
+    titleText:SetPoint("TOP", frame, "TOP", 0, -25)
+    titleText:SetJustifyH("CENTER")
+    titleText:SetText("Select your bot!")
 
     -- Close button (CENTER to TOPRIGHT -42,-31 — same as GossipFrameCloseButton)
     local closeBtn = CreateFrame("Button", nil, frame, "UIPanelCloseButton")
@@ -331,7 +621,7 @@ local function CreateUI()
     greetingText:SetPoint("TOPRIGHT", scrollChild, "TOPRIGHT", -30, -10)
     greetingText:SetJustifyH("LEFT")
     greetingText:SetWordWrap(true)
-    greetingText:SetText("Target a player bot, pick a role, click APPLY.")
+    greetingText:SetText("Target a player bot, pick a role, choose a spec, click APPLY.")
 
     -- Initial scroll child sizing
     scrollFrame:UpdateScrollChildRect()
@@ -341,9 +631,9 @@ local function CreateUI()
     -- ============================================================
 
     local roleDefs = {
-        { k = "tank",   t = "TANK" },
-        { k = "healer", t = "HEALER" },
-        { k = "dps",    t = "DPS" },
+        { k = "tank",   t = "Tank" },
+        { k = "healer", t = "Healer" },
+        { k = "dps",    t = "Dps" },
     }
     for i, rd in ipairs(roleDefs) do
         local b = MakeRoleBtn(frame, rd.t, rd.k)
@@ -361,21 +651,63 @@ local function CreateUI()
     roleBtns["dps"]:SetPoint("TOP", anchor, "BOTTOM", 0, -14)
 
     -- ============================================================
-    -- Role status text (centered, two lines, between buttons and APPLY)
+    -- SPEC DROPDOWN (replaces old static roleStatusText)
+    -- UIDropDownMenuTemplate with global name required by FrameXML.
+    -- Positioned between role buttons and APPLY button.
     -- ============================================================
 
-    -- Separate anchor: stays below buttons regardless of button position
-    local statusAnchor = CreateFrame("Frame", nil, frame)
-    statusAnchor:SetSize(1, 1)
-    statusAnchor:SetPoint("TOP", scrollFrame, "TOP", 0, -175)
+    -- Positioned below role buttons using the SAME anchor as the buttons (guaranteed centering)
+    specDropdown = CreateFrame("Frame", "BRSSpecDropdown", frame, "UIDropDownMenuTemplate")
 
-    roleStatusText = frame:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
-    roleStatusText:SetPoint("TOP", statusAnchor, "BOTTOM", 0, -20)
-    roleStatusText:SetWidth(SCROLL_W)
-    roleStatusText:SetJustifyH("CENTER")
-    roleStatusText:SetJustifyV("TOP")
-    roleStatusText:SetText("Role:\n?")
-    roleStatusText:SetFont("Fonts\\FRIZQT__.TTF", 13, "OUTLINE")
+    specDropdown:ClearAllPoints()
+    -- Same anchor point as dps button (anchor.BOTTOM), placed further down
+    -- dps button is at anchor.BOTTOM (0, -14), 24px tall → its bottom edge is at -38
+    -- Dropdown goes 20px below the dps button bottom edge
+    specDropdown:SetPoint("TOP", anchor, "BOTTOM", -25, -55)
+
+    -- Set dropdown widths (fits inside the scroll area, centered like role buttons)
+    UIDropDownMenu_SetWidth(specDropdown, 240)
+    specDropdown:SetWidth(240)
+
+    -- Register init function (called each time dropdown opens — dynamic content)
+    UIDropDownMenu_Initialize(specDropdown, SpecDropdown_Initialize)
+
+    -- Hide the original button completely (arrow + its textures)
+    local ddButton = _G["BRSSpecDropdownButton"]
+    if ddButton then
+        ddButton:Hide()
+    end
+
+    -- Transparent overlay button: full dropdown area + 10px wider
+    local overlay = CreateFrame("Button", nil, specDropdown)
+    overlay:SetPoint("TOPLEFT", specDropdown, "TOPLEFT", 0, 0)
+    overlay:SetPoint("BOTTOMRIGHT", specDropdown, "BOTTOMRIGHT", 30, 0)
+    overlay:SetScript("OnClick", function()
+        ToggleDropDownMenu(1, nil, specDropdown)
+    end)
+
+    -- ============================================================
+    -- APPLY button (anchored inside scroll frame area, near bottom)
+    -- ============================================================
+
+    -- ============================================================
+    -- QUERY button (above APPLY — sends "talents" whisper to bot)
+    -- ============================================================
+
+    local queryBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
+    queryBtn:SetSize(120, 24)
+    queryBtn:SetPoint("BOTTOM", scrollFrame, "BOTTOM", 0, 65)
+    queryBtn:SetText("Query")
+    queryBtn:SetScript("OnClick", function()
+        local unit = GetBotUnit()
+        local name = GetUnitName(unit, true)
+        if name and UnitExists(unit) and UnitIsPlayer(unit) and not UnitIsUnit(unit, "player") then
+            SendChatMessage("talents", "WHISPER", nil, name)
+            DEFAULT_CHAT_FRAME:AddMessage("|cff88ddff[BRS] Sent 'talents' to " .. name .. "|r")
+        else
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] Select one of your bots before click!|r")
+        end
+    end)
 
     -- ============================================================
     -- APPLY button (anchored inside scroll frame area, near bottom)
@@ -384,7 +716,7 @@ local function CreateUI()
     local applyBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
     applyBtn:SetSize(120, 24)
     applyBtn:SetPoint("BOTTOM", scrollFrame, "BOTTOM", 0, 35)
-    applyBtn:SetText("APPLY")
+    applyBtn:SetText("Apply")
     applyBtn:SetScript("OnClick", function()
         if not frame._currentClassFile then
             DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] Target a player first!|r")
@@ -394,12 +726,17 @@ local function CreateUI()
             DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] This class can't be " .. BRS_Options.role:upper() .. "!|r")
             return
         end
-        local name = GetUnitName("target", true)
+        if not BRS_Options.spec then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] No spec selected! Pick one from the dropdown.|r")
+            return
+        end
+        local unit = GetBotUnit()
+        local name = GetUnitName(unit, true)
         if not name then
             DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] Lost target!|r")
             return
         end
-        if UnitIsUnit("target", "player") then
+        if UnitIsUnit(unit, "player") then
             DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] Can't set role on yourself! Target a bot.|r")
             return
         end
@@ -433,8 +770,9 @@ loader:SetScript("OnEvent", function(self, event, addon)
     local ev = CreateFrame("Frame")
     ev:RegisterEvent("PLAYER_TARGET_CHANGED")
     ev:SetScript("OnEvent", function()
+        BotRoleSetterFrame._autoUnit = nil  -- Manual target always overrides auto-select
         OnTargetChanged()
     end)
 
-    DEFAULT_CHAT_FRAME:AddMessage("|cff88ddff[BotRoleSetter]|r /brs to toggle. Target a bot, pick role, APPLY.")
+    DEFAULT_CHAT_FRAME:AddMessage("|cff88ddff[BotRoleSetter]|r /brs to toggle. Target a bot, pick role, choose spec, APPLY.")
 end)

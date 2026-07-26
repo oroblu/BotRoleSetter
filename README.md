@@ -1,59 +1,128 @@
-# BotRoleSetter
+# CMaNGOS BotRoleSetter Addon
 
-Addon for CMaNGOS Playerbots — quick bot role setup with vanilla GossipFrame-style UI.
+*Client-side addon for quick bot role & talent spec setup — GossipFrame-style UI with spec dropdown.*
 
-## Features
+[![Version](https://img.shields.io/badge/version-6.0-blue)](.)
+[![WoW](https://img.shields.io/badge/wow-1.14.x%20Classic-yellow)](.)
+[![License](https://img.shields.io/badge/license-MIT-green)](.)
 
-- Automatic target class detection
-- Role selection: **TANK** | **HEALER** | **DPS**
-- Talent specs from `aiplayerbot.conf.dist.in`
-- Send commands via whisper to the target bot
-- Full GossipFrame-style UI (384×512)
+## What It Does
 
-## UI Structure
+Manually whispering `talents pve prot`, `.bot init`, `co +tank`, etc. to every bot is tedious. This addon automates the whole setup:
+
+1. **Target a bot** (or open `/brs` while in a party — auto-selects the first member)
+2. **Pick a role** — Tank, Healer, or Dps (unavailable roles are greyed out)
+3. **Choose a talent spec** from the dropdown (93+ specs from `aiplayerbot.conf.dist.in`)
+4. **Click Apply** — queues 7 commands via whisper at 1-second intervals
+
+## Quick Start
 
 ```
-┌─────────────── 384px ───────────────┐
-│  [Icon]  Class Name            [X]  │  ← portrait + name + close
-│                                      │
-│  ┌──────── ScrollFrame ───────────┐ │
-│  │  Target a player bot, pick     │ │  ← scrollable greeting text
-│  │  a role, click APPLY.     [↑] │ │
-│  │                            [█] │ │
-│  │     [TANK] [HEALER]       [↓] │ │  ← role buttons (siblings,
-│  │        [DPS]                    │ │    overlap the scroll area)
-│  │                                │ │
-│  │           Role:                │ │  ← centered status text
-│  │     TANK (pve prot)            │ │    (two lines, between buttons and APPLY)
-│  │                                │ │
-│  │         [ APPLY ]              │ │  ← action button (inside scroll area)
-│  │                                │ │
-│  └────────────────────────────────┘ │
-└──────────────────────────────────────┘
+/brs                    ← toggle the window
+target a bot            ← or join a party and /brs auto-selects
+click Tank/Healer/Dps   ← pick a role
+choose spec in dropdown ← pick the exact talent spec
+click Apply             ← send all commands
+click Query             ← send "talents" whisper to see bot's current spec
 ```
-
-**Key pattern:** The role buttons and APPLY are children of the main frame, NOT the `scrollChild`. This allows them to be positioned overlapping the ScrollFrame area — they render on top (DrawLayer + creation order). The role text is a FontString centered between the buttons and APPLY, on two lines (`Role:\nTANK (pve prot)`).
-
-## Concepts Demonstrated
-
-- **ScrollFrame** (`UIPanelScrollFrameTemplate`) with scrollable greeting text
-- **Scroll activated only when text exceeds the visible area** (`UpdateScrollChildRect` + `GetStringHeight`)
-- **Scrollbar positioning** GossipFrame style (anchored to the right edge)
-- **Mouse wheel** routed through the scrollbar
-- **Conflict-free anchoring**: `TOPLEFT` + `TOPRIGHT` (same Y) instead of `TOPLEFT` + `RIGHT` (conflicting Y)
-- `UIPanelButtonTemplate` with side icons and shifted text
-- `LockHighlight`/`UnlockHighlight` for selected role state
-- `Enable`/`Disable` for roles unavailable for the class
-- `C_Timer.After` for sequential command sending via whisper
-- `SetShown` pattern for toggle slash command
-- `UI-QuestGreeting-*` corner textures + `UI-Quest-BotLeftPatch` patch
-
-## Installation
-
-Copy the `BotRoleSetter/` folder into `World of Warcraft\_classic_\Interface\AddOns\`
 
 ## Commands
 
-- `/brs` — Open/close the window
+| Command | Description |
+|---------|-------------|
+| `/brs` | Open/close the BotRoleSetter window |
+| **Apply** button | Send the full 7-command sequence to the selected bot |
+| **Query** button | Whisper `talents` to the bot (bot replies with its current spec) |
 
-# 
+### Command Sequence (Apply)
+
+Sent via whisper, 1 second apart:
+
+| # | Command | Purpose |
+|---|---------|---------|
+| 1 | `talents <spec>` | Apply the selected talent spec |
+| 2 | `.bot init <name> rare` | Initialize gear + default strategies |
+| 3 | `reset strats` | Recalculate strategies on the new spec |
+| 4 | `nc -quest,-loot,+ai chat,-grind` | Non-combat layer |
+| 5 | `follow` | Bot follows the master |
+| 6 | `summon` | Summon the bot |
+| 7 | `co +<role>,-cc,-behind` | Combat layer (+tank/+heal also get `-dps`) |
+
+## UI Overview
+
+```
+┌────────────── 384px ──────────────┐
+│  [Icon]  Botname (Class)     [X]  │
+│                                    │
+│  ┌───── ScrollFrame 300×334 ────┐ │
+│  │  Greeting text          [↑]  │ │
+│  │                         [█]  │ │
+│  │   [Tank] [Healer]       [↓]  │ │
+│  │        [Dps]                  │ │
+│  │                               │ │
+│  │  [pve prot           ▾]      │ │  ← spec dropdown
+│  │                               │ │
+│  │       [ Query ]               │ │
+│  │       [ Apply ]               │ │
+│  └───────────────────────────────┘ │
+│                              [Close]│
+└────────────────────────────────────┘
+```
+
+**Key details:**
+
+- **Title** — shows the selected bot's name and class on one line: `Botname (Class)`. White, same font as greeting text.
+- **Icon** — class icon with circular mask (like GossipFrame portrait), 46×46.
+- **Role buttons** — `UIPanelButtonTemplate` with role icons. Selected role is highlighted. Unavailable roles are disabled per-class.
+- **Spec dropdown** — `UIDropDownMenuTemplate` populated dynamically from class+role. Click anywhere on the dropdown to open.
+- **Query** — sends `talents` whisper so the bot reports its current spec.
+- **Apply** — sends the full 7-command sequence.
+- `/brs` in party auto-selects the first group member.
+- `/brs` outside party shows: *"You are not in party, invite your bots"*.
+
+## Installation
+
+1. Copy `BotRoleSetter/` into your AddOns folder:
+```
+World of Warcraft\_classic_\Interface\AddOns\BotRoleSetter\
+```
+2. Restart WoW or reload UI (`/reload`)
+3. You should see `[BotRoleSetter] /brs to toggle...` in chat ✔
+
+## Server Configuration
+
+```ini
+# aiplayerbot.conf
+# Must be set to "full" so talents actually allocate points
+# before .bot init reads GetPlayerSpecTab().
+# With "no", Warriors default to tab=2 (Protection) → wrong gear.
+AiPlayerbot.AutoPickTalents = full
+```
+
+## Requirements
+
+- **CMaNGOS** with the **playerbots** module (ike3 or similar)
+- **WoW Classic 1.14.x** client (Interface 11400)
+- Player with **whisper permissions** (GM or appropriately ranked)
+
+## Troubleshooting
+
+**"Apply talents [spec] talent link is invalid":**
+The spec names in this addon come from `cmangos/playerbots` default config. Your server may use different spec names. Run `/w <botname> talents list` on a bot to see the actual spec names available, then update the `TALENTS` table in `BotRoleSetter.lua` accordingly.
+
+**"You are not in party, invite your bots":**
+You're not in a party and have no player target. Join a party or manually target a bot, then open `/brs`.
+
+**Dropdown shows "Role not available":**
+The selected class doesn't have that role — e.g., Warrior can't be Healer, Mage can't be Tank. Pick a different role.
+
+**Window opens but shows old bot info:**
+Target a bot or toggle `/brs` twice — the window refreshes from current group/target state on each open.
+
+## License
+
+MIT — do whatever you want with it.
+
+## Credits
+
+Built on the [CMaNGOS playerbots](https://github.com/cmangos/playerbots) ecosystem. UI patterns from the GossipFrame (`UI-QuestGreeting-*` textures, `UIPanelScrollFrameTemplate`, portrait mask). Spec data from `aiplayerbot.conf.dist.in`.
