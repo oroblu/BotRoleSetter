@@ -50,24 +50,7 @@ Sent via whisper, 1 second apart:
 
 ## UI Overview
 
-```
-┌────────────── 384px ──────────────┐
-│  [Icon]  Botname (Class)     [X]  │
-│                                    │
-│  ┌───── ScrollFrame 300×334 ────┐ │
-│  │  Greeting text          [↑]  │ │
-│  │                         [█]  │ │
-│  │   [Tank] [Healer]       [↓]  │ │
-│  │        [Dps]                  │ │
-│  │                               │ │
-│  │  [pve prot           ▾]      │ │  ← spec dropdown
-│  │                               │ │
-│  │       [ Query ]               │ │
-│  │       [ Apply ]               │ │
-│  └───────────────────────────────┘ │
-│                              [Close]│
-└────────────────────────────────────┘
-```
+![BotRoleSetter Screenshot](preview.png)
 
 **Key details:**
 

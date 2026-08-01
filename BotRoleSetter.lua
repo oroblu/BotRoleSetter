@@ -290,7 +290,7 @@ local function SendToBot(cf, role)
         DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] No target!|r")
         return
     end
-    local spec = GetSpec(cf, role)  -- Called once, used by BuildCommands and display
+    local spec = GetSpec(cf, role)
     local cmds = BuildCommands(cf, role, name, spec)
     DEFAULT_CHAT_FRAME:AddMessage("|cff88ddff[BRS] Queueing " .. #cmds .. " commands to " .. name .. ":|r")
     for i, cmd in ipairs(cmds) do
@@ -707,6 +707,20 @@ local function CreateUI()
     applyBtn:SetPoint("BOTTOM", scrollFrame, "BOTTOM", 0, 35)
     applyBtn:SetText("Apply")
     applyBtn:SetScript("OnClick", function()
+        local unit = GetBotUnit()
+        local name = GetUnitName(unit, true)
+        if not name then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] Lost target!|r")
+            return
+        end
+        if UnitIsUnit(unit, "player") then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] Can't set role on yourself! Target a bot.|r")
+            return
+        end
+        if not UnitIsConnected(unit) then
+            DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] " .. name .. " is offline!|r")
+            return
+        end
         if not frame._currentClassFile then
             DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] Target a player first!|r")
             return
@@ -717,16 +731,6 @@ local function CreateUI()
         end
         if not BRS_Options.spec then
             DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] No spec selected! Pick one from the dropdown.|r")
-            return
-        end
-        local unit = GetBotUnit()
-        local name = GetUnitName(unit, true)
-        if not name then
-            DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] Lost target!|r")
-            return
-        end
-        if UnitIsUnit(unit, "player") then
-            DEFAULT_CHAT_FRAME:AddMessage("|cffff4444[BRS] Can't set role on yourself! Target a bot.|r")
             return
         end
         SendToBot(frame._currentClassFile, BRS_Options.role)
