@@ -1,5 +1,5 @@
 ## Interface: 11400
-## Title: BotRoleSetter
+## Title: BotRoleSetter Classic
 ## Author: Cortex
 ## Notes: CMaNGOS Playerbots quick role setup. GossipFrame-style UI with spec dropdown. /brs to toggle.
 ## Version: 6.0

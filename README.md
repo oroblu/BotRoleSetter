@@ -1,6 +1,6 @@
-# CMaNGOS BotRoleSetter Addon
+# CMaNGOS BotRoleSetter Classic Addon
 
-*Client-side addon for quick bot role & talent spec setup — GossipFrame-style UI with spec dropdown.*
+*Client-side addon for quick bot role & talent spec setup — GossipFrame-style UI with spec dropdown. WoW Classic 1.14.x.*
 
 [![Version](https://img.shields.io/badge/version-6.0-blue)](.)
 [![WoW](https://img.shields.io/badge/wow-1.14.x%20Classic-yellow)](.)
