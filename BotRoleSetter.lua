@@ -211,7 +211,6 @@ local TALENTS = {
 
 -- Role strategy names for co command (checked by IsTank/IsHeal in PlayerbotAI.cpp)
 local ROLE_STRATEGIES = { tank = "tank", healer = "heal", dps = "dps" }
-local ALL_ROLE_STRS = { "tank", "heal", "dps" }
 
 ----------------------------- Helpers
 
@@ -486,7 +485,11 @@ end
 local function UpdateClassDisplay()
     local unit = GetBotUnit()
     local name = GetUnitName(unit, true)
-    local cf = name and UnitExists(unit) and UnitIsPlayer(unit) and select(2, UnitClass(unit))
+    local cf = nil
+    if name and UnitExists(unit) and UnitIsPlayer(unit) then
+        local _, classFile = UnitClass(unit)
+        cf = classFile
+    end
 
     if cf and CLASS_ICONS[cf] then
         local ci = CLASS_ICONS[cf]
@@ -675,10 +678,6 @@ local function CreateUI()
     overlay:SetScript("OnClick", function()
         ToggleDropDownMenu(1, nil, specDropdown)
     end)
-
-    -- ============================================================
-    -- APPLY button (anchored inside scroll frame area, near bottom)
-    -- ============================================================
 
     -- ============================================================
     -- QUERY button (above APPLY — sends "talents" whisper to bot)
